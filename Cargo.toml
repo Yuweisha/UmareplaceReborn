@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 description = "Global character replacement plugin for Hachimi (ported from Trainers' Legend G)"
 license = "GPL-3.0-or-later"
-repository = "https://github.com/Yuweisha/hachimi-charreplace-plugin"
+repository = "https://github.com/Yuweisha/UmareplaceReborn"
 
 [lib]
 crate-type = ["cdylib"]

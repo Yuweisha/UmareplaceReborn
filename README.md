@@ -13,6 +13,7 @@
 - 配置格式与 TLG 的 `replaceGlobalChar` 完全兼容，可以直接把 TLG 的配置段粘过来
 - 游戏内菜单：配置编辑器下新增选项「角色替换」，角色和服装从 `master.mdb` 直接读取**带搜索的下拉**，**可以直接搜角色名或 ID**（例如搜 `1114` 就是迷人景致）
 - 数据库直接用 rusqlite 读文件，不走游戏内部接口
+- 语音也一起换：改写 cue 名里的角色 ID 让游戏去播替换后角色的语音，Hachimi 的字幕会跟着换，不需要解包任何资源
 
 ## 安装
 
@@ -51,6 +52,7 @@
 {
     "enable": true,
     "replace_universal": true,
+    "replace_voice": true,
     "data": [
         {
             "origCharId": 1046,
@@ -70,6 +72,8 @@
 | `newChrId` | 替换成哪个角色 |
 | `newClothId` | 用哪个服装（服装 ID 一般是 `<角色 ID> * 100 + 序号`） |
 | `replaceMini` | 这条规则是否也作用于迷你角色 |
+| `replace_voice` | 是否同时替换语音（默认开）。只影响 cue 名里带角色 ID 的语音 |
+| `log_audio_cues` | 诊断开关：把游戏播放的每个 cue 记进日志，用来定位还不支持的音轨（例如 live 歌曲） |
 
 生效的场景与 TLG 一致：除了默认、家中对话/走动、以及迷你场景以外的控制器都会被替换。
 
@@ -102,6 +106,7 @@ cargo ndk -t arm64-v8a build --release
 - 通过 Hachimi 插件接口 v3（`hachimi_init_v3`）接入，使用的 API：`interceptor_hook` 挂钩、`il2cpp_*` 取类/字段、`gui_*` 画界面、`hachimi_get_data_path` 定位 `master.mdb`。
 - 挂钩 `Gallop.CharacterBuildInfo::Rebuild`，在模型构建前改写 `_charaId` / `_dressId` / `_headModelSubId` / `_motionDressId`，并把 `_cardId` 置 -1；另外挂钩 `Gallop.WorkSingleModeCharaData::GetRaceDressId` 让比赛服装也走替换表。
 - 服装的头部模型与迷你模型信息来自 `master.mdb` 的 `dress_data`（`head_sub_id`、`have_mini`），启动时一次性缓存。
+- 语音替换挂钩 `Gallop.AudioManager::PlayInternal`，放行之前把 cue sheet 名里的角色 ID 换成替换后的角色（`snd_voi_title_100100` 属于角色 1001）。改写发生在原函数之前，Hachimi 的字幕 hook 在同一条调用链上读到的是新角色，所以台词会跟着换。只有最后一段以四位角色 ID 开头的 cue 会被改写，系统音效这类不动。
 
 ## 许可
 
