@@ -77,9 +77,66 @@ ComboFn = ctypes.CFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_char_p,
 ColoredFn = ctypes.CFUNCTYPE(None, ctypes.c_void_p, ctypes.c_ubyte, ctypes.c_ubyte,
                              ctypes.c_ubyte, ctypes.c_ubyte, ctypes.c_char_p)
 
+class AudioPlayback(ctypes.Structure):
+    """Cute.Cri.AudioPlayback —— 按值返回，字段顺序必须和管理端结构一致"""
+    _fields_ = [
+        ("cri_atom_ex_playback", ctypes.c_uint32),
+        ("is_error", ctypes.c_bool),
+        ("sound_group", ctypes.c_int32),
+        ("is_3d_sound", ctypes.c_bool),
+        ("atom_source_list_index", ctypes.c_int32),
+        ("cue_sheet_name", ctypes.c_void_p),
+        ("cue_name", ctypes.c_void_p),
+        ("cue_id", ctypes.c_int32),
+    ]
+
+class RequestCueInfo(ctypes.Structure):
+    """Cute.Cri.RequestCueInfo"""
+    _fields_ = [
+        ("cue_sheet_name", ctypes.c_void_p),
+        ("cue_name", ctypes.c_void_p),
+        ("cue_id", ctypes.c_int32),
+    ]
+
+PlayInternalFn = ctypes.CFUNCTYPE(ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p,
+                                  ctypes.c_int32, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int32)
+
+played_cue_sheets = []
+
+@PlayInternalFn
+def orig_play_internal(ret_buf, this, group, cue_info, play_param, stop_type):
+    info = ctypes.cast(cue_info, ctypes.POINTER(RequestCueInfo))[0]
+    played_cue_sheets.append(il2cpp_to_str(info.cue_sheet_name))
+    return 0
+
+_il2cpp_strings = {}
+
+def il2cpp_to_str(ptr):
+    entry = _il2cpp_strings.get(ptr)
+    if not entry:
+        return None
+    return entry[0].raw.decode("utf-16-le").rstrip("\x00")
+
+def f_string_new(text_ptr):
+    text = ctypes.string_at(text_ptr).decode("utf-8")
+    data = text.encode("utf-16-le") + b"\x00\x00"
+    buf = ctypes.create_string_buffer(data, len(data))
+    addr = ctypes.addressof(buf)
+    _il2cpp_strings[addr] = (buf, len(text))
+    return addr
+
+def f_string_chars(ptr):
+    return ptr
+
+def f_string_length(ptr):
+    entry = _il2cpp_strings.get(ptr)
+    return entry[1] if entry else 0
+
 BASE = ctypes.create_string_buffer(HACHIMI_DIR.encode())
 DATA = ctypes.create_string_buffer(GAME_DATA.encode())
-state = {"game_init": None, "section": None, "icon": None, "icon_magic": None, "title": None}
+state = {"game_init": None, "section": None, "icon": None, "icon_magic": None,
+         "title": None, "audio_hook": None}
+last_method = {"name": None}
 FAKE_CLASS = 0x3000
 FAKE_ADDR = 0x4000
 FAKE_TRAMPOLINE = 0x5000
@@ -96,7 +153,9 @@ def f_interceptor(this):
 
 def f_intercept_hook(this, orig, hook):
     calls.append(f"interceptor_hook(orig=0x{orig:x}, hook=0x{hook:x})")
-    return FAKE_TRAMPOLINE
+    if last_method["name"] == "PlayInternal":
+        state["audio_hook"] = hook
+    return ctypes.cast(orig_play_internal, ctypes.c_void_p).value
 
 def f_base():
     return ctypes.addressof(BASE)
@@ -124,6 +183,7 @@ def f_class(image, ns, name):
     return FAKE_CLASS
 
 def f_method(cls, name, argc):
+    last_method["name"] = name.decode()
     calls.append(f"get_method_addr({name.decode()}, argc={argc})")
     return FAKE_ADDR
 
@@ -185,6 +245,9 @@ API = {
     "hachimi_instance": cb_of(InstFn, f_instance),
     "hachimi_get_interceptor": cb_of(ctypes.CFUNCTYPE(ctypes.c_void_p, ctypes.c_void_p), f_interceptor),
     "interceptor_hook": cb_of(InterceptFn, f_intercept_hook),
+    "il2cpp_string_new": cb_of(ctypes.CFUNCTYPE(ctypes.c_void_p, ctypes.c_char_p), f_string_new),
+    "il2cpp_string_chars": cb_of(ctypes.CFUNCTYPE(ctypes.c_void_p, ctypes.c_void_p), f_string_chars),
+    "il2cpp_string_length": cb_of(ctypes.CFUNCTYPE(ctypes.c_int32, ctypes.c_void_p), f_string_length),
     "hachimi_get_base_dir": cb_of(PathFn, f_base),
     "hachimi_get_data_path": cb_of(PathFn, f_data),
     "hachimi_register_on_game_initialized": cb_of(RegGameInit, f_reg_game_init),
@@ -256,4 +319,34 @@ calls.clear()
 state["section"](0x7000, None)
 for c in calls:
     print("  " + c)
+def run_audio(group, cue_sheet):
+    """像游戏那样调用一次 PlayInternal hook，返回游戏最终看到的 cue sheet"""
+    played_cue_sheets.clear()
+    info = RequestCueInfo(f_string_new(cue_sheet.encode()), None, 0)
+    hook = ctypes.cast(state["audio_hook"], PlayInternalFn)
+    ret_buf = ctypes.create_string_buffer(64)
+    hook(ret_buf, None, group, ctypes.byref(info), None, 0)
+    return il2cpp_to_str(info.cue_sheet_name), played_cue_sheets[-1]
+
+print("\n=== 7) 语音替换（hook Gallop.AudioManager::PlayInternal）===")
+assert state["audio_hook"], "PlayInternal 没有被 hook"
+print(f"  PlayInternal hook 地址: 0x{state['audio_hook']:x}")
+
+rewritten, handed_to_game = run_audio(2, "snd_voi_title_104600")
+print(f"  Voice: snd_voi_title_104600 → {rewritten}（游戏收到 {handed_to_game}）")
+assert rewritten == "snd_voi_title_103000", "语音 cue sheet 没有被改写"
+assert handed_to_game == rewritten, "改写没有发生在原函数之前，字幕不会跟着换"
+
+untouched, _ = run_audio(0, "snd_voi_title_104600")
+print(f"  Bgm（不替换）: snd_voi_title_104600 → {untouched}")
+assert untouched == "snd_voi_title_104600", "非 Voice 组不应被改写"
+
+system, _ = run_audio(2, "snd_sfx_common")
+print(f"  非角色 cue: snd_sfx_common → {system}")
+assert system == "snd_sfx_common", "不带角色 ID 的 cue 不应被改写"
+
+alt, _ = run_audio(2, "snd_voi_home_104611")
+print(f"  变体后缀保留: snd_voi_home_104611 → {alt}")
+assert alt == "snd_voi_home_103011", "后缀变体应保持不变"
+
 print("\n全部检查通过。")

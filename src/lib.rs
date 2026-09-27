@@ -8,6 +8,7 @@
 //! `<game dir>/hachimi/config.json`, e.g. `"hachimi\\charreplace.dll"`.
 
 mod api;
+mod audio;
 mod config;
 mod db;
 mod hook;

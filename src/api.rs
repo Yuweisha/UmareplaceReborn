@@ -27,6 +27,7 @@ pub type GameInitializedCallback = extern "C" fn(userdata: *mut c_void);
 
 // Opaque IL2CPP / runtime types - we only ever pass their pointers around.
 pub type Il2CppObject = c_void;
+pub type Il2CppString = c_void;
 pub type Il2CppClass = c_void;
 pub type Il2CppImage = c_void;
 pub type FieldInfo = c_void;
@@ -58,6 +59,9 @@ type FnUiComboMenu = extern "C" fn(
     *mut c_void, *const c_char, *mut i32, *const *const c_char, usize, *mut c_char, usize,
 ) -> bool;
 type FnShowNotification = extern "C" fn(*const c_char);
+type FnStringNew = extern "C" fn(*const c_char) -> *mut Il2CppString;
+type FnStringChars = extern "C" fn(*mut Il2CppString) -> *mut u16;
+type FnStringLength = extern "C" fn(*mut Il2CppString) -> i32;
 type FnLog = extern "C" fn(i32, *const c_char, *const c_char);
 type FnGetPath = extern "C" fn() -> *const c_char;
 
@@ -74,6 +78,9 @@ pub struct Api {
     pub il2cpp_get_field_from_name: FnGetFieldFromName,
     pub il2cpp_get_field_value: FnGetFieldValue,
     pub il2cpp_set_field_value: FnSetFieldValue,
+    pub il2cpp_string_new: FnStringNew,
+    pub il2cpp_string_chars: FnStringChars,
+    pub il2cpp_string_length: FnStringLength,
     pub register_on_game_initialized: FnRegisterOnGameInitialized,
     pub register_menu_section_with_icon: FnRegisterMenuSectionWithIcon,
     pub ui_heading: FnUiHeading,
@@ -130,6 +137,9 @@ pub fn init(get_api: GetApiFn) -> Option<&'static Api> {
         il2cpp_get_field_from_name: bind!(get_api, "il2cpp_get_field_from_name"),
         il2cpp_get_field_value: bind!(get_api, "il2cpp_get_field_value"),
         il2cpp_set_field_value: bind!(get_api, "il2cpp_set_field_value"),
+        il2cpp_string_new: bind!(get_api, "il2cpp_string_new"),
+        il2cpp_string_chars: bind!(get_api, "il2cpp_string_chars"),
+        il2cpp_string_length: bind!(get_api, "il2cpp_string_length"),
         register_on_game_initialized: bind!(get_api, "hachimi_register_on_game_initialized"),
         register_menu_section_with_icon: bind!(get_api, "gui_register_menu_section_with_icon"),
         ui_heading: bind!(get_api, "gui_ui_heading"),
@@ -381,6 +391,42 @@ impl Symbols {
         }
         let Ok(c_name) = CString::new(name) else { return std::ptr::null_mut() };
         unsafe { (api.il2cpp_get_field_from_name)(class, c_name.as_ptr()) }
+    }
+
+    /// Read a managed string. IL2CPP stores strings as UTF-16, so this goes
+    /// through `il2cpp_string_chars` / `il2cpp_string_length`.
+    pub fn string_to_rust(s: *mut Il2CppString) -> Option<String> {
+        if s.is_null() {
+            return None;
+        }
+        let api = api()?;
+        unsafe {
+            let len = (api.il2cpp_string_length)(s);
+            let chars = (api.il2cpp_string_chars)(s);
+            if chars.is_null() || len <= 0 {
+                return None;
+            }
+            Some(String::from_utf16_lossy(std::slice::from_raw_parts(
+                chars,
+                len as usize,
+            )))
+        }
+    }
+
+    /// Allocate a managed string (UTF-8 in, as `il2cpp_string_new` expects).
+    ///
+    /// The returned object is owned by the IL2CPP heap: if the game does not
+    /// keep a reference to it, a garbage collection may free it. Callers that
+    /// hand it to the game for immediate use are fine; anything longer lived
+    /// should be kept alive explicitly.
+    pub fn rust_to_string(s: &str) -> *mut Il2CppString {
+        let Some(api) = api() else {
+            return std::ptr::null_mut();
+        };
+        let Ok(c_str) = CString::new(s) else {
+            return std::ptr::null_mut();
+        };
+        unsafe { (api.il2cpp_string_new)(c_str.as_ptr()) }
     }
 
     pub fn get_field_i32(obj: *mut Il2CppObject, field: *mut FieldInfo) -> i32 {

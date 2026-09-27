@@ -259,5 +259,8 @@ pub fn install() -> bool {
         );
     }
 
+    // Voice replacement rides on the game's own audio entry point.
+    crate::audio::install();
+
     ok
 }

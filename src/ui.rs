@@ -76,12 +76,56 @@ fn cached(key: &str, build: impl FnOnce() -> Vec<(i32, String)>) -> Arc<ComboLis
     list
 }
 
+/// How many glyphs a dropdown label may take up (a CJK glyph counts double).
+/// Hachimi renders combos at a fixed width, so long names have to be trimmed
+/// instead of overflowing the widget.
+const LABEL_BUDGET: usize = 20;
+
+/// Trim a dropdown label to the widget width. The id stays visible - it also
+/// keeps the entry searchable by id - and the name is cut to whatever room is
+/// left.
+fn fit_label(id: i32, name: &str, budget: usize) -> String {
+    let id_text = id.to_string();
+    if name.is_empty() {
+        return id_text;
+    }
+
+    let mut room = budget.saturating_sub(id_text.chars().count() + 1);
+    let mut kept = String::new();
+    let mut truncated = false;
+    for ch in name.chars() {
+        let width = if ch.is_ascii() { 1 } else { 2 };
+        if width > room {
+            truncated = true;
+            break;
+        }
+        room -= width;
+        kept.push(ch);
+    }
+
+    if truncated {
+        // The ellipsis is a wide glyph, so free up room for it first.
+        while room < 2 {
+            match kept.pop() {
+                Some(last) => room += if last.is_ascii() { 1 } else { 2 },
+                None => break,
+            }
+        }
+        kept.push('…');
+    }
+
+    format!("{} {}", id_text, kept)
+}
+
 /// Everything the player can pick, with `0` meaning "no replacement"/default.
 fn chara_list() -> Arc<ComboList> {
     cached("chara", || {
         let mut items = vec![(0, "默认".to_string())];
         for character in db::characters() {
-            items.push((character.id, format!("{} {}", character.id, character.name)));
+            items.push((
+                character.id,
+                fit_label(character.id, &character.name, LABEL_BUDGET),
+            ));
         }
         items
     })
@@ -96,11 +140,7 @@ fn dress_list(chara_id: i32) -> Arc<ComboList> {
                 chara_id <= 0 || dress.chara_id == 0 || dress.chara_id == chara_id
             })
             .map(|dress| {
-                let label = if dress.name.is_empty() {
-                    format!("{}", dress.id)
-                } else {
-                    format!("{} {}", dress.id, dress.name)
-                };
+                let label = fit_label(dress.id, &dress.name, LABEL_BUDGET);
                 (dress.id, label)
             })
             .collect();
@@ -189,11 +229,11 @@ extern "C" fn draw_row_dress(ui: *mut c_void, userdata: *mut c_void) {
 
 fn draw_row_tail(ui: *mut c_void, ctx: &mut RowCtx) {
     let mut mini = ctx.replace_mini;
-    if api::ui_checkbox(ui, "迷你", &mut mini) {
+    if api::ui_checkbox(ui, "替换迷你角色", &mut mini) {
         ctx.replace_mini = mini;
         ctx.changed = true;
     }
-    if api::ui_button(ui, "X") {
+    if api::ui_button(ui, "删除配置") {
         ctx.remove = true;
     }
 }
@@ -227,6 +267,18 @@ pub extern "C" fn section_callback(ui: *mut c_void, _userdata: *mut c_void) {
     let mut universal = config::with(|config| config.replace_universal);
     if api::ui_checkbox(ui, "同时替换服装", &mut universal) {
         config::with_mut(|config| config.replace_universal = universal);
+        config::save();
+    }
+
+    let mut voice = config::with(|config| config.replace_voice);
+    if api::ui_checkbox(ui, "同时替换语音", &mut voice) {
+        config::with_mut(|config| config.replace_voice = voice);
+        config::save();
+    }
+
+    let mut log_cues = config::with(|config| config.log_audio_cues);
+    if api::ui_checkbox(ui, "记录音频 cue（诊断用）", &mut log_cues) {
+        config::with_mut(|config| config.log_audio_cues = log_cues);
         config::save();
     }
 
