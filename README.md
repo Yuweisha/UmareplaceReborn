@@ -15,22 +15,36 @@
 
 ## 安装
 
-1. 把 `charreplace.dll` 放到游戏根目录（和 `UmamusumePrettyDerby_Jpn.exe` 同一层）。
-2. 编辑 `<游戏目录>/hachimi/config.json`，在 `windows.load_libraries` 里加上文件名：
+### Windows
+
+1. 把 `charreplace.dll` 放进 `<游戏目录>/hachimi/` 文件夹。
+2. 编辑 `<游戏目录>/hachimi/config.json`，在 `windows.load_libraries` 里加上路径：
 
 ```json
 {
     "windows": {
         "load_libraries": [
-            "charreplace.dll"
+            "hachimi\\charreplace.dll"
         ]
     }
 }
 ```
 
-3. 启动游戏，打开菜单（默认右方向键）→ 配置编辑器 → **角色替换**。
+（路径相对于游戏根目录，所以放在游戏根目录时写 `"charreplace.dll"` 也可以。）
 
-> **注意**：如果 Hachimi 本体里已经带了同样的角色替换功能（自编译版本），请换回官方 hachimi.dll 再用本插件，否则两套替换逻辑会互相干扰。
+3. 重启游戏，打开菜单（默认右方向键）→ 配置编辑器 → **角色替换**。
+
+### Android
+
+安卓上插件通过 **UmaPatcher Edge** 添加，不需要手动往游戏目录塞文件：
+
+1. 准备 `libhachimi_charreplace.so`（arm64 设备）。
+2. 打开 UmaPatcher Edge → 向下滚动到「插件」部分 → 「添加插件」→ 选择这个 .so 文件。
+3. 按平常的流程补丁游戏，然后启动。
+
+插件会保留在 UmaPatcher Edge 里，游戏更新后重新补丁即可，不用重新添加。
+
+> **注意**：如果 Hachimi 本体里已经带了同样的角色替换功能（自编译版本），请换回官方 Hachimi 再用本插件，否则两套替换逻辑会互相干扰。
 
 ## 配置
 
@@ -72,12 +86,25 @@
 
 ## 从源码构建
 
+Windows：
+
 ```bash
 cargo build --release
 # 产物：target/release/charreplace.dll
 ```
 
-需要 Rust（MSVC 工具链）。依赖只有 serde、serde_json、rusqlite（bundled sqlite）、once_cell。
+Android（需要 Android NDK，用 [cargo-ndk](https://github.com/bbqsrc/cargo-ndk) 自动配置工具链）：
+
+```bash
+rustup target add aarch64-linux-android
+cargo install cargo-ndk
+cargo ndk -t arm64-v8a build --release
+# 产物：target/aarch64-linux-android/release/libcharreplace.so
+```
+
+代码本身不含平台相关分支，两个平台共用同一份源码。依赖只有 serde、serde_json、rusqlite（bundled sqlite）、once_cell。
+
+推 tag（`v*`）时 GitHub Actions 会自动构建两个平台并发布 Release；仓库里的 `tools/verify_load.py` 可以在不启动游戏的情况下验证 Windows dll 的加载流程。
 
 ## 实现说明
 
