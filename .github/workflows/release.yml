@@ -1,0 +1,64 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "版本号（手动触发时使用，例如 v0.1.0）"
+        required: true
+        default: "v0.1.0"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build
+        run: cargo build --release --locked
+
+      - name: Prepare files
+        shell: bash
+        run: |
+          mkdir -p dist
+          cp target/release/charreplace.dll dist/
+          cp README.md dist/
+          echo "TAG=${{ github.event.inputs.version || github.ref_name }}" >> "$GITHUB_ENV"
+
+      - name: Create release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          NOTES="角色替换插件。
+
+          - 从 Trainers' Legend G 的 replaceGlobalChar 移植
+          - 挂钩 CharacterBuildInfo::Rebuild 与 WorkSingleModeCharaData::GetRaceDressId
+          - 配置编辑器内的「角色替换」页面，角色与服装都是带搜索的下拉（可直接搜 ID，例如 1114）
+          - 配置存放在 hachimi/charreplace.json，键名兼容 TLG
+
+          安装：把 charreplace.dll 放到游戏根目录，并在 hachimi/config.json 的 windows.load_libraries 里加上 \"charreplace.dll\"。
+          注意：请使用官方版 hachimi.dll，否则会与 Hachimi 本体内置的同类功能重复替换。"
+          gh release create "$TAG" dist/charreplace.dll dist/README.md \
+            --title "$TAG" --notes "$NOTES" --repo "${{ github.repository }}" \
+          || gh release upload "$TAG" dist/charreplace.dll dist/README.md --clobber --repo "${{ github.repository }}"
