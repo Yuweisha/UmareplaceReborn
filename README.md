@@ -18,19 +18,17 @@
 ### Windows
 
 1. 把 `charreplace.dll` 放进 `<游戏目录>/hachimi/` 文件夹。
-2. 编辑 `<游戏目录>/hachimi/config.json`，在 `windows.load_libraries` 里加上路径：
+2. 在 `<游戏目录>/hachimi/config.json` 的 `load_libraries` 里加上路径（顶层键，Hachimi 自己也是写在这里）：
 
 ```json
 {
-    "windows": {
-        "load_libraries": [
-            "hachimi\\charreplace.dll"
-        ]
-    }
+    "load_libraries": [
+        "hachimi\\charreplace.dll"
+    ]
 }
 ```
 
-（路径相对于游戏根目录，所以放在游戏根目录时写 `"charreplace.dll"` 也可以。）
+路径按游戏根目录解析，所以把 dll 直接放在游戏根目录时写 `"charreplace.dll"` 也可以。
 
 3. 重启游戏，打开菜单（默认右方向键）→ 配置编辑器 → **角色替换**。
 
