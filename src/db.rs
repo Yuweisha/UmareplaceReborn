@@ -30,6 +30,8 @@ pub struct DressEntry {
 
 #[derive(Debug, Clone, Copy)]
 pub struct DressInfo {
+    /// Owner of the dress. 0 marks the generic dresses every character shares.
+    pub chara_id: i32,
     pub head_sub_id: i32,
     pub have_mini: bool,
 }
@@ -95,7 +97,9 @@ pub fn load() {
 /// Cache every dress' head model id and mini flag up front, so the hook never
 /// has to touch the database while the game is rendering.
 fn warm_dress_info(conn: &Connection) {
-    let Ok(mut stmt) = conn.prepare("SELECT id, head_sub_id, have_mini FROM dress_data") else {
+    let Ok(mut stmt) =
+        conn.prepare("SELECT id, chara_id, head_sub_id, have_mini FROM dress_data")
+    else {
         return;
     };
     let Ok(rows) = stmt.query_map([], |row| {
@@ -103,16 +107,18 @@ fn warm_dress_info(conn: &Connection) {
             row.get::<_, i32>(0)?,
             row.get::<_, i32>(1)?,
             row.get::<_, i32>(2)?,
+            row.get::<_, i32>(3)?,
         ))
     }) else {
         return;
     };
 
     let mut cache = DRESS_INFO_CACHE.lock().unwrap();
-    for (id, head_sub_id, have_mini) in rows.flatten() {
+    for (id, chara_id, head_sub_id, have_mini) in rows.flatten() {
         cache.insert(
             id,
             Some(DressInfo {
+                chara_id,
                 head_sub_id,
                 have_mini: have_mini != 0,
             }),
@@ -240,14 +246,16 @@ pub fn dress_info(dress_id: i32) -> Option<DressInfo> {
 fn query_dress_info(dress_id: i32) -> Option<DressInfo> {
     let conn = open()?;
     let mut stmt = conn
-        .prepare("SELECT head_sub_id, have_mini FROM dress_data WHERE id = ?1")
+        .prepare("SELECT chara_id, head_sub_id, have_mini FROM dress_data WHERE id = ?1")
         .ok()?;
     let mut rows = stmt.query([dress_id]).ok()?;
     let row = rows.next().ok()??;
 
-    let head_sub_id: i32 = row.get(0).unwrap_or(0);
-    let have_mini: i32 = row.get(1).unwrap_or(0);
+    let chara_id: i32 = row.get(0).unwrap_or(0);
+    let head_sub_id: i32 = row.get(1).unwrap_or(0);
+    let have_mini: i32 = row.get(2).unwrap_or(0);
     Some(DressInfo {
+        chara_id,
         head_sub_id,
         have_mini: have_mini != 0,
     })
@@ -259,4 +267,10 @@ pub fn dress_head_sub_id(dress_id: i32) -> i32 {
 
 pub fn dress_has_mini(dress_id: i32) -> bool {
     dress_info(dress_id).map(|info| info.have_mini).unwrap_or(false)
+}
+
+/// Which character a dress belongs to. 0 means a generic dress (shared by
+/// everyone) or an unknown id.
+pub fn dress_chara_id(dress_id: i32) -> i32 {
+    dress_info(dress_id).map(|info| info.chara_id).unwrap_or(0)
 }

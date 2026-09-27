@@ -51,11 +51,32 @@ fn find_replacement(chara_id: i32, mini: bool) -> Option<(i32, i32)> {
     })
 }
 
+/// Which character a dress belongs to, 0 for the generic ones. A dress from
+/// another character leaves the rig with a body from one model and a head from
+/// another, which collapses into a T-pose.
+fn align_dress_with_chara(dress_id: &mut i32, new_chara_id: i32) {
+    if *dress_id == 0 {
+        return;
+    }
+    let owner = db::dress_chara_id(*dress_id);
+    if owner == 0 || owner == new_chara_id {
+        return;
+    }
+
+    let fallback = new_chara_id * 100 + 1;
+    api::log_warn(&format!(
+        "dressId {} does not belong to chara {}, falling back to {}",
+        *dress_id, new_chara_id, fallback
+    ));
+    *dress_id = fallback;
+}
+
 fn replace_char_controller(
     chara_id: &mut i32,
     dress_id: &mut i32,
     head_id: &mut i32,
     controller_type: i32,
+    allow_orig: bool,
 ) -> bool {
     let (enabled, replace_universal) =
         config::with(|config| (config.enable, config.replace_universal));
@@ -63,18 +84,22 @@ fn replace_char_controller(
         return false;
     }
 
-    let mut replace_dress = true;
-    if *dress_id < 100000 && !replace_universal {
-        replace_dress = false;
+    // Generic dresses (dress_id < 100000: race wear, uniform, gym clothes)
+    // belong to scenes the game choreographs itself. Skipping the dress alone
+    // is not enough: rewriting the character id while leaving the generic
+    // dress behind produces combos the game has no assets for - the race
+    // screen ends up without a thumbnail and a cutscene hangs. Skip the whole
+    // replacement instead.
+    if !replace_universal && *dress_id < 100000 {
+        return false;
     }
 
     if controller_type == CT_MINI {
         if let Some((new_chara_id, new_dress_id)) = find_replacement(*chara_id, true) {
             if db::dress_has_mini(new_dress_id) {
                 *chara_id = new_chara_id;
-                if replace_dress {
-                    *dress_id = new_dress_id;
-                }
+                *dress_id = new_dress_id;
+                align_dress_with_chara(dress_id, new_chara_id);
                 *head_id = db::dress_head_sub_id(*dress_id);
                 return true;
             }
@@ -97,6 +122,14 @@ fn replace_char_controller(
         return false;
     }
 
+    // CT_ORIG is not a real controller: the game uses it as a marker when it
+    // asks what dress a record carries. Rewriting values there makes it ask
+    // again, looping hundreds of times a second and hanging the load. Only
+    // GetRaceDressId, which needs the rewrite, passes allow_orig.
+    if controller_type == CT_ORIG && !allow_orig {
+        return false;
+    }
+
     // The trainer can't be replaced while standing at home.
     if *chara_id == TRAINER_CHARA_ID && controller_type == CT_HOME_STAND {
         return false;
@@ -104,9 +137,8 @@ fn replace_char_controller(
 
     if let Some((new_chara_id, new_dress_id)) = find_replacement(*chara_id, false) {
         *chara_id = new_chara_id;
-        if replace_dress {
-            *dress_id = new_dress_id;
-        }
+        *dress_id = new_dress_id;
+        align_dress_with_chara(dress_id, new_chara_id);
         *head_id = db::dress_head_sub_id(*dress_id);
         return true;
     }
@@ -129,6 +161,7 @@ extern "C" fn rebuild_hook(this: *mut Il2CppObject) {
             &mut dress_id,
             &mut head_model_sub_id,
             controller_type,
+            false,
         ) {
             Symbols::set_field_i32(this, chara_field, chara_id);
             Symbols::set_field_i32(this, DRESS_ID_FIELD.load(Ordering::SeqCst), dress_id);
@@ -164,7 +197,13 @@ extern "C" fn race_dress_hook(this: *mut Il2CppObject, is_apply_dress_change: bo
         let mut new_chara_id = chara_id;
         let mut new_dress_id = ret;
         let mut new_head_id = 0;
-        if replace_char_controller(&mut new_chara_id, &mut new_dress_id, &mut new_head_id, CT_ORIG) {
+        if replace_char_controller(
+            &mut new_chara_id,
+            &mut new_dress_id,
+            &mut new_head_id,
+            CT_ORIG,
+            true,
+        ) {
             return new_dress_id;
         }
     }
