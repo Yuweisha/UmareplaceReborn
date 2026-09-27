@@ -9,6 +9,8 @@
 // `extern "C" fn` pointer safe.
 #![allow(unused_unsafe)]
 
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::ffi::{c_char, c_void, CStr, CString};
 use std::sync::atomic::{AtomicPtr, Ordering};
 
@@ -273,17 +275,40 @@ pub fn ui_combo_menu(ui: *mut c_void, id: &str, selected: &mut i32, items: &[*co
     if items.is_empty() {
         return false;
     }
-    unsafe {
+
+    search_buffer(id, |buf, buf_len| unsafe {
         (api.ui_combo_menu)(
             ui,
             c_id.as_ptr(),
             selected as *mut i32,
             items.as_ptr(),
             items.len(),
-            std::ptr::null_mut(),
-            0,
+            buf,
+            buf_len,
         )
-    }
+    })
+}
+
+/// Length of each dropdown's search buffer, in bytes (UTF-8: a Chinese
+/// character takes three).
+const SEARCH_BUFFER_LEN: usize = 128;
+
+thread_local! {
+    /// Hachimi reads the dropdown's search box from this buffer and writes the
+    /// user's input back into it, so every dropdown needs memory that outlives
+    /// the frame *and* keeps a stable address. Passing a pointer to a temporary
+    /// string (or null) makes the search box look like it drops every keystroke.
+    static SEARCH_BUFFERS: RefCell<HashMap<String, Vec<u8>>> = RefCell::new(HashMap::new());
+}
+
+fn search_buffer<R>(id: &str, f: impl FnOnce(*mut c_char, usize) -> R) -> R {
+    SEARCH_BUFFERS.with(|buffers| {
+        let mut buffers = buffers.borrow_mut();
+        let buf = buffers
+            .entry(id.to_owned())
+            .or_insert_with(|| vec![0u8; SEARCH_BUFFER_LEN]);
+        f(buf.as_mut_ptr() as *mut c_char, buf.len())
+    })
 }
 
 #[allow(dead_code)]

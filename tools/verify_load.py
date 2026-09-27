@@ -149,13 +149,30 @@ def f_horizontal(ui, cb, ud):
     fn(ui, ud)
     return True
 
+combo_buffers = {}
+
 def f_combo(ui, id_, sel_ptr, items, count, search, slen):
     idx = sel_ptr[0]
     arr = ctypes.cast(items, ctypes.POINTER(ctypes.c_char_p * count))[0]
     labels = [arr[i].decode() for i in range(count)]
-    hits = [l for l in labels if "1114" in l]
-    calls.append(f"  combo({id_.decode()}): {count} 项, 选中索引 {idx}, "
-                 f"搜索 1114 → {hits}")
+    name = id_.decode()
+
+    assert search and slen > 0, f"{name}: 搜索缓冲区为空，输入会立刻消失"
+    buf = ctypes.cast(search, ctypes.c_void_p)
+
+    if name in combo_buffers:
+        assert combo_buffers[name] == buf.value, (
+            f"{name}: 搜索缓冲区地址跨帧变了（{combo_buffers[name]:#x} → {buf.value:#x}）")
+        typed = ctypes.string_at(buf).decode()
+        hits = [l for l in labels if "1114" in l]
+        calls.append(f"  combo({name}): {count} 项, 选中索引 {idx}, "
+                     f"缓冲区保留 {typed!r} → 过滤 1114 命中 {hits[:1]}")
+    else:
+        combo_buffers[name] = buf.value
+        ctypes.memmove(buf, b"1114", 4)
+        calls.append(f"  combo({name}): {count} 项, 选中索引 {idx}, "
+                     f"缓冲区 {slen} 字节, 模拟输入 1114")
+
     if count > 3:
         calls.append(f"    前 3 项: {labels[:3]}")
     return False
@@ -233,3 +250,10 @@ calls.clear()
 state["section"](0x7000, None)
 for c in calls:
     print("  " + c)
+
+print("\n=== 6) 再渲染一帧（验证搜索缓冲区跨帧存活）===")
+calls.clear()
+state["section"](0x7000, None)
+for c in calls:
+    print("  " + c)
+print("\n全部检查通过。")

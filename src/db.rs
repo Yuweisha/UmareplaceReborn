@@ -153,7 +153,7 @@ fn load_dresses(
 ) -> rusqlite::Result<Vec<DressEntry>> {
     let mut stmt = conn.prepare(
         "SELECT D.id, D.chara_id, T.text FROM dress_data AS D \
-         LEFT JOIN text_data AS T ON T.\"index\" = D.id AND T.id = 5",
+         LEFT JOIN text_data AS T ON T.\"index\" = D.id AND T.id = 14",
     )?;
     let rows = stmt.query_map([], |row| {
         let id: i32 = row.get(0)?;
@@ -199,8 +199,9 @@ fn load_localized_names() -> HashMap<String, String> {
         return names;
     };
 
-    // 170 and 6 both hold character names; 5 holds dress names.
-    for category in ["170", "6", "5"] {
+    // 170 and 6 both hold character names, 14 holds dress names (5 is not it -
+    // with 5 the dress dropdown showed bare ids).
+    for category in ["170", "6", "14"] {
         if let Some(entries) = parsed.remove(category) {
             for (index, text) in entries {
                 names.entry(index).or_insert(text);
