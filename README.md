@@ -106,7 +106,7 @@ cargo ndk -t arm64-v8a build --release
 - 通过 Hachimi 插件接口 v3（`hachimi_init_v3`）接入，使用的 API：`interceptor_hook` 挂钩、`il2cpp_*` 取类/字段、`gui_*` 画界面、`hachimi_get_data_path` 定位 `master.mdb`。
 - 挂钩 `Gallop.CharacterBuildInfo::Rebuild`，在模型构建前改写 `_charaId` / `_dressId` / `_headModelSubId` / `_motionDressId`，并把 `_cardId` 置 -1；另外挂钩 `Gallop.WorkSingleModeCharaData::GetRaceDressId` 让比赛服装也走替换表。
 - 服装的头部模型与迷你模型信息来自 `master.mdb` 的 `dress_data`（`head_sub_id`、`have_mini`），启动时一次性缓存。
-- 语音替换挂钩 `Gallop.AudioManager::PlayInternal`，放行之前把 cue sheet 名里的角色 ID 换成替换后的角色（`snd_voi_title_100100` 属于角色 1001）。改写发生在原函数之前，Hachimi 的字幕 hook 在同一条调用链上读到的是新角色，所以台词会跟着换。只有最后一段以四位角色 ID 开头的 cue 会被改写，系统音效这类不动。
+- 语音替换在 IL2CPP 的字符串构造函数 `il2cpp_string_new` 这一层改写 cue 名（`snd_voi_training_110301` 属于角色 1103 → 换成替换后的角色，`snd_voi_live_*` 同样适用）。之所以不直接 hook 播放入口 `AudioManager.PlayInternal`：Hachimi 为了字幕已经占了那个地址，而 MinHook 不允许同一地址二次 hook。改写发生在 cue 名进入游戏之前，所以 Hachimi 的字幕读到的是替换后的角色，台词会跟着换。只有 `snd_voi_` 开头、且最后一段以角色 ID 打头的 cue 会被改写，系统音效这类不动。
 
 ## 许可
 

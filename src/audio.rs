@@ -85,7 +85,12 @@ pub fn install() -> bool {
 
     let orig = (api.interceptor_hook)(api::interceptor(), addr, play_internal as *mut c_void);
     if orig.is_null() {
-        api::log_error("failed to hook AudioManager.PlayInternal");
+        // Hachimi hooks this method itself for its captions and MinHook refuses
+        // to hook the same address twice - expected. Voice replacement then
+        // happens one layer down, in string_hook.
+        api::log_warn(
+            "AudioManager.PlayInternal already hooked (Hachimi captions); falling back to the string hook",
+        );
         return false;
     }
 
@@ -151,18 +156,9 @@ fn rewrite_cue_sheet(group: i32, cue_info: *mut RequestCueInfo) {
         return;
     }
 
-    let Some((chara_id, range)) = chara_id_in(&sheet) else {
+    let Some(new_sheet) = rewrite_cue_name(&sheet) else {
         return;
     };
-    let Some(new_chara_id) = config::lookup_new_char(chara_id) else {
-        return;
-    };
-    if new_chara_id == chara_id {
-        return;
-    }
-
-    let mut new_sheet = sheet.clone();
-    new_sheet.replace_range(range, &format!("{:04}", new_chara_id));
 
     let new_ptr = Symbols::rust_to_string(&new_sheet);
     if new_ptr.is_null() {
@@ -174,15 +170,33 @@ fn rewrite_cue_sheet(group: i32, cue_info: *mut RequestCueInfo) {
     api::log_info(&format!("[audio] {} -> {}", sheet, new_sheet));
 }
 
+/// Rewrite the character id inside a cue sheet name, if a rule maps it.
+///
+/// Returns `None` for cue names that carry no per-character id, so callers can
+/// pass them through untouched.
+pub fn rewrite_cue_name(sheet: &str) -> Option<String> {
+    let (chara_id, range) = chara_id_in(sheet)?;
+    let new_chara_id = config::lookup_new_char(chara_id)?;
+    if new_chara_id == chara_id {
+        return None;
+    }
+
+    let mut new_sheet = sheet.to_owned();
+    new_sheet.replace_range(range, &format!("{:04}", new_chara_id));
+    Some(new_sheet)
+}
+
 /// Find the character id at the start of the cue sheet's last `_`-separated
 /// segment, plus the byte range it occupies.
 ///
-/// This mirrors Hachimi's own rule (`snd_voi_title_100100` -> 1001), including
-/// the six character minimum, so both agree on which cues are per-character.
+/// Same convention Hachimi uses for its captions (`snd_voi_title_100100` ->
+/// 1001). Real cue names come in two shapes - `snd_voi_training_110301` and
+/// `snd_voi_title_1053` - so four digits is the minimum, and the id has to fall
+/// in the character range to avoid rewriting unrelated numbers.
 fn chara_id_in(sheet: &str) -> Option<(i32, std::ops::Range<usize>)> {
     let start = sheet.rfind('_').map(|index| index + 1).unwrap_or(0);
     let segment = &sheet[start..];
-    if segment.len() < 6 {
+    if segment.len() < 4 {
         return None;
     }
 
@@ -196,4 +210,42 @@ fn chara_id_in(sheet: &str) -> Option<(i32, std::ops::Range<usize>)> {
     }
 
     Some((chara_id, start..start + 4))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn parse(sheet: &str) -> Option<i32> {
+        chara_id_in(sheet).map(|(id, _)| id)
+    }
+
+    #[test]
+    fn reads_character_ids_from_real_cue_names() {
+        assert_eq!(parse("snd_voi_training_110301"), Some(1103));
+        assert_eq!(parse("snd_voi_training_110300"), Some(1103));
+        assert_eq!(parse("snd_voi_live_111400"), Some(1114));
+        assert_eq!(parse("snd_voi_home_111401"), Some(1114));
+        assert_eq!(parse("snd_voi_outgame_102901"), Some(1029));
+        assert_eq!(parse("snd_voi_title_1053"), Some(1053));
+        assert_eq!(parse("snd_voi_tc_1053"), Some(1053));
+    }
+
+    #[test]
+    fn ignores_names_without_a_character_id() {
+        assert_eq!(parse("snd_sfx_common"), None); // 最后一段不是数字
+        assert_eq!(parse("snd_voi_abc_123"), None); // 不足四位
+        assert_eq!(parse("snd_voi_xyz_9999"), None); // 超出角色范围
+        assert_eq!(parse("snd_voi_"), None);
+        assert_eq!(parse(""), None);
+    }
+
+    #[test]
+    fn only_the_id_is_replaced() {
+        let (id, range) = chara_id_in("snd_voi_live_111400").unwrap();
+        assert_eq!(id, 1114);
+        let mut out = "snd_voi_live_111400".to_owned();
+        out.replace_range(range, "1030");
+        assert_eq!(out, "snd_voi_live_103000");
+    }
 }

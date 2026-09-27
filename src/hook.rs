@@ -259,8 +259,11 @@ pub fn install() -> bool {
         );
     }
 
-    // Voice replacement rides on the game's own audio entry point.
+    // Voice replacement. The audio entry point is the cleaner place, but
+    // Hachimi normally holds it for its captions, so the string-level hook is
+    // what actually carries the feature.
     crate::audio::install();
+    crate::string_hook::install();
 
     ok
 }

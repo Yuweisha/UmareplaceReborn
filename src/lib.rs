@@ -12,6 +12,7 @@ mod audio;
 mod config;
 mod db;
 mod hook;
+mod string_hook;
 mod ui;
 
 use std::sync::atomic::{AtomicBool, Ordering};
