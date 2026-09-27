@@ -293,6 +293,7 @@ pub fn show_notification(message: &str) {
     }
 }
 
+#[allow(dead_code)]
 pub fn register_on_game_initialized(callback: GameInitializedCallback) {
     if let Some(api) = api() {
         unsafe { (api.register_on_game_initialized)(Some(callback), std::ptr::null_mut()) };
