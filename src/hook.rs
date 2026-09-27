@@ -206,12 +206,19 @@ fn hook_method(
     true
 }
 
-/// Install both hooks. Must run after the game initialized (the classes have
-/// to exist) and after the database is loaded.
-pub fn install() {
+/// Install both hooks. Must run once Hachimi has initialised IL2CPP (its own
+/// hooks are installed by then, so the classes resolve). Re-running is safe:
+/// Hachimi returns the existing trampoline for an already hooked function.
+///
+/// Returns false when the classes could not be resolved, so the caller can
+/// retry later.
+pub fn install() -> bool {
+    let mut ok = true;
+
     let class = Symbols::get_class("umamusume", "Gallop", "CharacterBuildInfo");
     if class.is_null() {
         api::log_error("class not found: Gallop.CharacterBuildInfo");
+        ok = false;
     } else {
         CHARA_ID_FIELD.store(Symbols::get_field_from_name(class, "_charaId"), Ordering::SeqCst);
         CARD_ID_FIELD.store(Symbols::get_field_from_name(class, "_cardId"), Ordering::SeqCst);
@@ -229,7 +236,7 @@ pub fn install() {
             Ordering::SeqCst,
         );
 
-        hook_method(
+        ok &= hook_method(
             class as *mut c_void,
             "Rebuild",
             0,
@@ -241,8 +248,9 @@ pub fn install() {
     let race_class = Symbols::get_class("umamusume", "Gallop", "WorkSingleModeCharaData");
     if race_class.is_null() {
         api::log_error("class not found: Gallop.WorkSingleModeCharaData");
+        ok = false;
     } else {
-        hook_method(
+        ok &= hook_method(
             race_class as *mut c_void,
             "GetRaceDressId",
             1,
@@ -250,4 +258,6 @@ pub fn install() {
             &RACE_DRESS_TRAMPOLINE,
         );
     }
+
+    ok
 }

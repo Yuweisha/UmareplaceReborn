@@ -6,11 +6,13 @@
 
 用法：cargo build --release 后运行 python tools/verify_load.py
 需要本机装有游戏（会以只读方式打开 master.mdb）。
+
+注意：hook 安装发生在 hachimi_init_v3 内部（Hachimi 初始化插件时 IL2CPP 已就绪），
+因此这里同步就能看到 hook 日志，数据库加载则在后台线程完成。
+
+完整模拟 Hachimi 加载 charreplace.dll：提供全部 24 个 API stub，验证
+初始化、配置迁移、master.mdb 读取、hook 安装路径和菜单界面的绘制调用。
 """
-
-"""完整模拟 Hachimi 加载 charreplace.dll：提供全部 24 个 API stub，验证
-初始化、配置迁移、master.mdb 读取、hook 安装路径和菜单界面的绘制调用。"""
-
 import ctypes
 import json
 import os
@@ -206,10 +208,12 @@ print(f"  未提供 stub 的名字: {unknown or '无'}")
 print(f"  菜单节: {calls[0] if calls else '无'}")
 print(f"  图标头部字节: {state['icon_magic']!r} (PNG 应为 b'\\x89PNG\\r\\n\\x1a\\n')")
 
-print("\n=== 2) 触发 game_initialized（真实读取 master.mdb）===")
+print("\n=== 2) 等待插件内部初始化（hook 安装 + 真实读取 master.mdb）===")
 t0 = time.time()
-state["game_init"](None)
-time.sleep(4)
+for _ in range(60):
+    if any("loaded" in m and "character" in m for _, m in logs):
+        break
+    time.sleep(0.5)
 print(f"  耗时 {time.time() - t0:.1f}s")
 for level, message in logs:
     print(f"  [log{level}] {message}")
