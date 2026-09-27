@@ -1,34 +1,29 @@
-# hachimi-charreplace-plugin
+# UMA角色替换Reborn
 
-把游戏里的角色全局替换成别的角色 —— 从 [Trainers' Legend G](https://github.com/MinamiChiwa/Trainers-Legend-G) 的 `replaceGlobalChar` 移植，做成 [Hachimi](https://github.com/kairusds/Hachimi-Edge) 的**外置插件**。
-
-好处是功能独立于 Hachimi 本体：Hachimi 更新时只要插件接口版本不变，这个 dll 不用重新编译。
+鸣谢、代码参考、灵感来源:Trainer-Legend-G
+把游戏里的角色全局替换成别的角色，作为Hachimi-Edge下挂载的独立插件。
+优点:原生、易于安装、不随本体更新而需要重新patch
+缺点:还没测
 
 ## 功能
 
-- 把指定角色在游戏里替换成另一个角色（含服装、头部模型）
+- 把指定角色在游戏里替换成另一个角色指定的服装
 - 可选是否同时替换服装、是否作用于迷你角色
 - 比赛服装（`GetRaceDressId`）也跟着替换
 - 配置格式与 TLG 的 `replaceGlobalChar` 完全兼容，可以直接把 TLG 的配置段粘过来
-- 游戏内菜单：配置编辑器里多出一页「角色替换」，角色和服装都是从 `master.mdb` 读出来的**带搜索的下拉**，**可以直接搜角色名或 ID**（例如搜 `1114` 就是迷人景致）
+- 游戏内菜单：配置编辑器下新增选项「角色替换」，角色和服装从 `master.mdb` 直接读取**带搜索的下拉**，**可以直接搜角色名或 ID**（例如搜 `1114` 就是迷人景致）
 - 数据库直接用 rusqlite 读文件，不走游戏内部接口
 
 ## 安装
 
 ### Windows
 
-1. 把 `charreplace.dll` 放进 `<游戏目录>/hachimi/` 文件夹。
+1. 把 `charreplace.dll` 放进 `<游戏根目录>` 文件夹。(例如UmamusumePrettyDerby_Jpn)
 2. 在 `<游戏目录>/hachimi/config.json` 的 `load_libraries` 里加上路径（顶层键，Hachimi 自己也是写在这里）：
 
 ```json
-{
-    "load_libraries": [
-        "hachimi\\charreplace.dll"
-    ]
-}
+    "load_libraries": ["charreplace.dll"]
 ```
-
-路径按游戏根目录解析，所以把 dll 直接放在游戏根目录时写 `"charreplace.dll"` 也可以。
 
 3. 重启游戏，打开菜单（默认右方向键）→ 配置编辑器 → **角色替换**。
 
@@ -41,8 +36,6 @@
 3. 按平常的流程补丁游戏，然后启动。
 
 插件会保留在 UmaPatcher Edge 里，游戏更新后重新补丁即可，不用重新添加。
-
-> **注意**：如果 Hachimi 本体里已经带了同样的角色替换功能（自编译版本），请换回官方 Hachimi 再用本插件，否则两套替换逻辑会互相干扰。
 
 ## 配置
 
