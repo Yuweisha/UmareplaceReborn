@@ -1,3 +1,5 @@
 /target
+installer/target
+installer/charreplace.dll
 _testenv
 *.log

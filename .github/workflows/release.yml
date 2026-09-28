@@ -18,8 +18,11 @@ env:
   RELEASE_NOTES: |
     角色替换插件。
 
-    **Windows**：下载 `charreplace.dll` 放到游戏根目录，并在 `hachimi/config.json` 的
-    `windows.load_libraries` 里加上 `"charreplace.dll"`。
+    **Windows**（推荐）：下载 `charreplace_installer.exe` 直接运行，它会自动找到游戏目录、
+    检测 Hachimi 本体、把插件装好并登记到配置里。装的时候会自动备份，`--uninstall` 可卸载。
+
+    也可以手动装：下载 `charreplace.dll` 放到游戏根目录，并在 `hachimi/config.json` 顶层
+    的 `load_libraries` 数组里加上 `"charreplace.dll"`。
 
     **Android**（arm64）：下载 `libhachimi_charreplace.so` 放到游戏的 native lib 目录 ——
     Hachimi 会自动扫描该目录下所有 `libhachimi_*.so`，无需改配置；也可以在
@@ -53,16 +56,24 @@ jobs:
       - name: Build
         run: cargo build --release --locked
 
+      - name: Build installer
+        run: |
+          cp target/release/charreplace.dll installer/charreplace.dll
+          cargo build --release --locked --manifest-path installer/Cargo.toml
+
       - name: Publish
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           TAG="${{ github.event.inputs.version || github.ref_name }}"
-          mkdir -p dist && cp target/release/charreplace.dll dist/
-          gh release create "$TAG" dist/charreplace.dll --title "$TAG" --notes "$RELEASE_NOTES" \
+          mkdir -p dist
+          cp target/release/charreplace.dll dist/
+          cp installer/target/release/charreplace_installer.exe dist/
+          gh release create "$TAG" dist/charreplace.dll dist/charreplace_installer.exe \
+            --title "$TAG" --notes "$RELEASE_NOTES" \
             --repo "${{ github.repository }}" \
-          || gh release upload "$TAG" dist/charreplace.dll --clobber --repo "${{ github.repository }}"
+          || gh release upload "$TAG" dist/charreplace.dll dist/charreplace_installer.exe --clobber --repo "${{ github.repository }}" 
 
   android:
     runs-on: ubuntu-latest

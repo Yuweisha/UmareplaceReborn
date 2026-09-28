@@ -1,0 +1,38 @@
+[package]
+name = "charreplace_installer"
+version = "0.1.0"
+edition = "2021"
+description = "Installer for the UmareplaceReborn Hachimi plugin"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/Yuweisha/UmareplaceReborn"
+
+# Standalone crate: the plugin itself is a cdylib built for the game, this is a
+# plain Windows binary. Empty [workspace] keeps cargo from looking upwards.
+[workspace]
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"
+
+[dependencies]
+serde_json = { version = "1.0", features = ["preserve_order"] }
+include-bytes-zstd = { version = "0.1", optional = true }
+
+[dependencies.windows]
+version = "0.58"
+features = [
+    "Win32_Foundation",
+    "Win32_System_Com",
+    "Win32_System_Registry",
+    "Win32_UI_Shell",
+    "Win32_UI_WindowsAndMessaging",
+]
+
+[features]
+# Embed the plugin dll compressed. On by default so a released installer is a
+# single self-contained exe.
+default = ["compress_bin"]
+compress_bin = ["dep:include-bytes-zstd"]
