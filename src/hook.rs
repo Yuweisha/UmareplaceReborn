@@ -20,6 +20,8 @@ const CT_HOME_STAND: i32 = 0x6;
 const CT_MINI: i32 = 0xd;
 /// Pseudo type used for dress ids coming from `GetRaceDressId`.
 const CT_ORIG: i32 = 0x1919810;
+const CT_EVENT_TIMELINE: i32 = 0x3;
+const CT_CUT_IN: i32 = 0x9;
 
 /// Vanilla id of the mini character model, used when the original dress has no
 /// mini model of its own.
@@ -78,8 +80,13 @@ fn replace_char_controller(
     controller_type: i32,
     allow_orig: bool,
 ) -> bool {
-    let (enabled, replace_universal) =
-        config::with(|config| (config.enable, config.replace_universal));
+    let (enabled, replace_universal, replace_in_cutscene) = config::with(|config| {
+        (
+            config.enable,
+            config.replace_universal,
+            config.replace_in_cutscene,
+        )
+    });
     if !enabled || config::with(|config| config.data.is_empty()) {
         return false;
     }
@@ -127,6 +134,15 @@ fn replace_char_controller(
     // again, looping hundreds of times a second and hanging the load. Only
     // GetRaceDressId, which needs the rewrite, passes allow_orig.
     if controller_type == CT_ORIG && !allow_orig {
+        return false;
+    }
+
+    // A cutscene's motion is choreographed per character: swap the character
+    // and there is no motion for it, so the model collapses into a T-pose and
+    // the scene waits on assets forever. Off by default.
+    if !replace_in_cutscene
+        && (controller_type == CT_EVENT_TIMELINE || controller_type == CT_CUT_IN)
+    {
         return false;
     }
 
@@ -204,7 +220,18 @@ extern "C" fn race_dress_hook(this: *mut Il2CppObject, is_apply_dress_change: bo
             CT_ORIG,
             true,
         ) {
-            return new_dress_id;
+            // This hook returns a dress id and nothing else - the character id
+            // stays with the caller. Handing back a dress owned by another
+            // character leaves the caller asking for "1002 wearing 1087's
+            // outfit", which has no assets: the home card renders as a blank
+            // block. Only take it when it belongs to the character asking.
+            if db::dress_chara_id(new_dress_id) == chara_id {
+                return new_dress_id;
+            }
+            api::log_warn(&format!(
+                "GetRaceDressId: dress {} does not belong to chara {}, keeping {}",
+                new_dress_id, chara_id, ret
+            ));
         }
     }
 
@@ -297,12 +324,6 @@ pub fn install() -> bool {
             &RACE_DRESS_TRAMPOLINE,
         );
     }
-
-    // Voice replacement. The audio entry point is the cleaner place, but
-    // Hachimi normally holds it for its captions, so the string-level hook is
-    // what actually carries the feature.
-    crate::audio::install();
-    crate::string_hook::install();
 
     ok
 }

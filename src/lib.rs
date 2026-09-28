@@ -8,11 +8,9 @@
 //! `<game dir>/hachimi/config.json`, e.g. `"hachimi\\charreplace.dll"`.
 
 mod api;
-mod audio;
 mod config;
 mod db;
 mod hook;
-mod string_hook;
 mod ui;
 
 use std::sync::atomic::{AtomicBool, Ordering};

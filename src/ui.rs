@@ -270,17 +270,12 @@ pub extern "C" fn section_callback(ui: *mut c_void, _userdata: *mut c_void) {
         config::save();
     }
 
-    let mut voice = config::with(|config| config.replace_voice);
-    if api::ui_checkbox(ui, "同时替换语音", &mut voice) {
-        config::with_mut(|config| config.replace_voice = voice);
+    let mut in_cutscene = config::with(|config| config.replace_in_cutscene);
+    if api::ui_checkbox(ui, "过场动画中也替换角色", &mut in_cutscene) {
+        config::with_mut(|config| config.replace_in_cutscene = in_cutscene);
         config::save();
     }
 
-    let mut log_cues = config::with(|config| config.log_audio_cues);
-    if api::ui_checkbox(ui, "记录音频 cue（诊断用）", &mut log_cues) {
-        config::with_mut(|config| config.log_audio_cues = log_cues);
-        config::save();
-    }
 
     api::ui_separator(ui);
 

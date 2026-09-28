@@ -37,10 +37,6 @@ fn default_replace_universal() -> bool {
     default_true()
 }
 
-fn default_replace_voice() -> bool {
-    default_true()
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CharReplaceConfig {
     #[serde(default)]
@@ -48,15 +44,11 @@ pub struct CharReplaceConfig {
     /// Replace the dress too (TLG's `replaceUniversal`).
     #[serde(default = "default_replace_universal", alias = "replaceUniversal")]
     pub replace_universal: bool,
-    /// Also replace voice lines. Per-character voices are identified by the
-    /// character id inside their cue sheet name (`snd_voi_title_100100`), so
-    /// this works without touching any asset.
-    #[serde(default = "default_replace_voice")]
-    pub replace_voice: bool,
-    /// Diagnostic switch: log every cue the game plays. Used to map the cue
-    /// families that carry no character id (song tracks in particular).
+    /// Also replace inside cutscenes (EventTimeline / CutIn). Off by default:
+    /// a swapped character there has no matching motion, so the model collapses
+    /// into a T-pose and the scene waits on assets forever.
     #[serde(default)]
-    pub log_audio_cues: bool,
+    pub replace_in_cutscene: bool,
     #[serde(default)]
     pub data: Vec<Entry>,
 }
@@ -67,8 +59,7 @@ impl Default for CharReplaceConfig {
             enable: false,
             // TLG defaults this to true.
             replace_universal: true,
-            replace_voice: true,
-            log_audio_cues: false,
+            replace_in_cutscene: false,
             data: Vec::new(),
         }
     }
@@ -128,18 +119,6 @@ fn migrate_from_hachimi_config() -> Option<CharReplaceConfig> {
 
 pub fn with<R>(f: impl FnOnce(&CharReplaceConfig) -> R) -> R {
     f(&CONFIG.read().unwrap())
-}
-
-/// The character that `chara_id` should be replaced by, if a rule maps it.
-/// Used by the voice hook and the dress/hook logic alike.
-pub fn lookup_new_char(chara_id: i32) -> Option<i32> {
-    with(|config| {
-        config
-            .data
-            .iter()
-            .find(|entry| entry.orig_char_id == chara_id)
-            .map(|entry| entry.new_char_id)
-    })
 }
 
 pub fn with_mut<R>(f: impl FnOnce(&mut CharReplaceConfig) -> R) -> R {

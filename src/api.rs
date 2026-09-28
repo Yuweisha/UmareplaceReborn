@@ -393,42 +393,6 @@ impl Symbols {
         unsafe { (api.il2cpp_get_field_from_name)(class, c_name.as_ptr()) }
     }
 
-    /// Read a managed string. IL2CPP stores strings as UTF-16, so this goes
-    /// through `il2cpp_string_chars` / `il2cpp_string_length`.
-    pub fn string_to_rust(s: *mut Il2CppString) -> Option<String> {
-        if s.is_null() {
-            return None;
-        }
-        let api = api()?;
-        unsafe {
-            let len = (api.il2cpp_string_length)(s);
-            let chars = (api.il2cpp_string_chars)(s);
-            if chars.is_null() || len <= 0 {
-                return None;
-            }
-            Some(String::from_utf16_lossy(std::slice::from_raw_parts(
-                chars,
-                len as usize,
-            )))
-        }
-    }
-
-    /// Allocate a managed string (UTF-8 in, as `il2cpp_string_new` expects).
-    ///
-    /// The returned object is owned by the IL2CPP heap: if the game does not
-    /// keep a reference to it, a garbage collection may free it. Callers that
-    /// hand it to the game for immediate use are fine; anything longer lived
-    /// should be kept alive explicitly.
-    pub fn rust_to_string(s: &str) -> *mut Il2CppString {
-        let Some(api) = api() else {
-            return std::ptr::null_mut();
-        };
-        let Ok(c_str) = CString::new(s) else {
-            return std::ptr::null_mut();
-        };
-        unsafe { (api.il2cpp_string_new)(c_str.as_ptr()) }
-    }
-
     pub fn get_field_i32(obj: *mut Il2CppObject, field: *mut FieldInfo) -> i32 {
         let mut out: i32 = 0;
         if let Some(api) = api() {
