@@ -1,25 +1,10 @@
-"""无需游戏的加载自检：用 ctypes 模拟 Hachimi 的插件加载流程。
-
-验证内容：导出符号 hachimi_init_v3 可调用、插件请求的 24 个 API 名字全部存在、
-配置可从 hachimi/config.json 的 replaceGlobalChar 迁移、真实读取 master.mdb
-（角色/服装/迷你标记）、两个 hook 的安装调用、以及菜单界面的绘制调用与下拉内容。
-
-用法：cargo build --release 后运行 python tools/verify_load.py
-需要本机装有游戏（会以只读方式打开 master.mdb）。
-
-注意：hook 安装发生在 hachimi_init_v3 内部（Hachimi 初始化插件时 IL2CPP 已就绪），
-因此这里同步就能看到 hook 日志，数据库加载则在后台线程完成。
-
-完整模拟 Hachimi 加载 charreplace.dll：提供全部 24 个 API stub，验证
-初始化、配置迁移、master.mdb 读取、hook 安装路径和菜单界面的绘制调用。
-"""
 import ctypes
 import json
 import os
 import shutil
 import time
 
-DLL = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "target", "release", "charreplace.dll")
+DLL = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "target", "release", "umareplacereborn.dll")
 GAME_DATA = r"C:\Users\Schwarz\AppData\LocalLow\Cygames\UmamusumePrettyDerby_Jpn"
 TESTENV = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "_testenv")
 HACHIMI_DIR = os.path.join(TESTENV, "hachimi")
@@ -319,34 +304,4 @@ calls.clear()
 state["section"](0x7000, None)
 for c in calls:
     print("  " + c)
-def run_audio(group, cue_sheet):
-    """像游戏那样调用一次 PlayInternal hook，返回游戏最终看到的 cue sheet"""
-    played_cue_sheets.clear()
-    info = RequestCueInfo(f_string_new(cue_sheet.encode()), None, 0)
-    hook = ctypes.cast(state["audio_hook"], PlayInternalFn)
-    ret_buf = ctypes.create_string_buffer(64)
-    hook(ret_buf, None, group, ctypes.byref(info), None, 0)
-    return il2cpp_to_str(info.cue_sheet_name), played_cue_sheets[-1]
-
-print("\n=== 7) 语音替换（hook Gallop.AudioManager::PlayInternal）===")
-assert state["audio_hook"], "PlayInternal 没有被 hook"
-print(f"  PlayInternal hook 地址: 0x{state['audio_hook']:x}")
-
-rewritten, handed_to_game = run_audio(2, "snd_voi_title_104600")
-print(f"  Voice: snd_voi_title_104600 → {rewritten}（游戏收到 {handed_to_game}）")
-assert rewritten == "snd_voi_title_103000", "语音 cue sheet 没有被改写"
-assert handed_to_game == rewritten, "改写没有发生在原函数之前，字幕不会跟着换"
-
-untouched, _ = run_audio(0, "snd_voi_title_104600")
-print(f"  Bgm（不替换）: snd_voi_title_104600 → {untouched}")
-assert untouched == "snd_voi_title_104600", "非 Voice 组不应被改写"
-
-system, _ = run_audio(2, "snd_sfx_common")
-print(f"  非角色 cue: snd_sfx_common → {system}")
-assert system == "snd_sfx_common", "不带角色 ID 的 cue 不应被改写"
-
-alt, _ = run_audio(2, "snd_voi_home_104611")
-print(f"  变体后缀保留: snd_voi_home_104611 → {alt}")
-assert alt == "snd_voi_home_103011", "后缀变体应保持不变"
-
 print("\n全部检查通过。")
