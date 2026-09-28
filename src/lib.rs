@@ -4,8 +4,8 @@
 //! built-in implementation) so it can live outside Hachimi itself and survive
 //! Hachimi updates.
 //!
-//! Load it by adding the library to `windows.load_libraries` in
-//! `<game dir>/hachimi/config.json`, e.g. `"hachimi\\charreplace.dll"`.
+//! Load it by adding the library to `load_libraries` in
+//! `<game dir>/hachimi/config.json`, e.g. `"umareplacereborn.dll"`.
 
 mod api;
 mod config;
@@ -35,7 +35,7 @@ pub extern "C" fn hachimi_init_v3(get_api: api::GetApiFn, _version: i32) -> i32 
         return api::INIT_ERROR;
     }
 
-    api::log_info("charreplace plugin loaded");
+    api::log_info("umareplacereborn plugin loaded");
     config::load();
 
     // Installing the hooks is just a few symbol lookups, so keep it on this

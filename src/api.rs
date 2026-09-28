@@ -196,7 +196,7 @@ fn log_raw(level: i32, target: &str, message: &str) {
     }
     // Before the API table exists we can only fall back to stderr (goes to the
     // console / hachimi.log depending on how the game was started).
-    eprintln!("[charreplace] {}: {}", target, message);
+    eprintln!("[umareplacereborn] {}: {}", target, message);
 }
 
 /// Path helper shared by every string-returning path API.

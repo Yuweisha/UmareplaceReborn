@@ -5,17 +5,33 @@ use std::path::{Path, PathBuf};
 use windows::core::PCWSTR;
 use windows::Win32::System::Registry::{RegGetValueW, HKEY_CURRENT_USER, RRF_RT_REG_SZ};
 
-const GAME_EXES: &[&str] = &[
-    "UmamusumePrettyDerby_Jpn.exe",
-    "UmamusumePrettyDerby.exe",
-    "komoeumamusume.exe",
-    "umamusume.exe",
+pub const TARGETS: &[(&str, &str)] = &[
+    ("UmamusumePrettyDerby_Jpn.exe", "Steam (JP) (cri_mana_vpx.dll)"),
+    ("UmamusumePrettyDerby.exe", "Steam (Global) (cri_mana_vpx.dll)"),
+    ("komoeumamusume.exe", "KOMOE (umamusume.exe)"),
+    ("umamusume.exe", "DMM (umamusume.exe)"),
 ];
 
-const HACHIMI_MARKERS: &[&str] = &["cri_mana_vpx.dll", "hachimi"];
+const KOMOE_REG_KEY: &str = r"Software\komoemumamusume";
+const KOMOE_PATH_VALUE: &str = "GameInstallPath";
+
+const HACHIMI_MARKERS: &[&str] = &[
+    "cri_mana_vpx.dll",
+    "hachimi",
+    "umamusume.exe.local",
+];
 
 pub fn looks_like_game(dir: &Path) -> bool {
-    GAME_EXES.iter().any(|exe| dir.join(exe).is_file())
+    TARGETS.iter().any(|(exe, _)| dir.join(exe).is_file())
+}
+
+pub fn install_dir_for(game_dir: &Path) -> PathBuf {
+    let dot_local = game_dir.join("umamusume.exe.local");
+    if dot_local.is_dir() {
+        dot_local
+    } else {
+        game_dir.to_path_buf()
+    }
 }
 
 pub fn hachimi_installed(dir: &Path) -> bool {
@@ -26,9 +42,9 @@ fn wide(s: &str) -> Vec<u16> {
     s.encode_utf16().chain(std::iter::once(0)).collect()
 }
 
-fn steam_root_from_registry() -> Option<PathBuf> {
-    let subkey = wide("Software\\Valve\\Steam");
-    let name = wide("SteamPath");
+fn reg_string(subkey: &str, value: &str) -> Option<String> {
+    let subkey = wide(subkey);
+    let name = wide(value);
     let mut buf = [0u16; 1024];
     let mut size = (buf.len() * 2) as u32;
 
@@ -48,8 +64,38 @@ fn steam_root_from_registry() -> Option<PathBuf> {
         return None;
     }
     let len = (size as usize / 2).saturating_sub(1).min(buf.len());
-    let path = PathBuf::from(String::from_utf16_lossy(&buf[..len]));
+    Some(String::from_utf16_lossy(&buf[..len]))
+}
+
+fn dmm_install_dir() -> Option<PathBuf> {
+    let appdata = std::env::var_os("APPDATA")?;
+    let config = PathBuf::from(appdata)
+        .join("dmmgameplayer5")
+        .join("dmmgame.cnf");
+
+    let text = fs::read_to_string(config).ok()?;
+    let json: serde_json::Value = serde_json::from_str(&text).ok()?;
+
+    for entry in json.get("contents")?.as_array()? {
+        if entry.get("productId").and_then(|v| v.as_str()) != Some("umamusume") {
+            continue;
+        }
+        let dir = PathBuf::from(entry.get("detail")?.get("path")?.as_str()?);
+        if dir.is_dir() {
+            return Some(dir);
+        }
+    }
+    None
+}
+
+fn steam_root_from_registry() -> Option<PathBuf> {
+    let path = PathBuf::from(reg_string(r"Software\Valve\Steam", "SteamPath")?);
     path.is_dir().then_some(path)
+}
+
+fn komoe_registry_dir() -> Option<PathBuf> {
+    let path = PathBuf::from(reg_string(KOMOE_REG_KEY, KOMOE_PATH_VALUE)?);
+    looks_like_game(&path).then_some(path)
 }
 
 fn steam_libraries() -> Vec<PathBuf> {
@@ -86,10 +132,7 @@ fn steam_libraries() -> Vec<PathBuf> {
                 continue;
             };
             let rest = rest.trim();
-            let Some(value) = rest
-                .strip_prefix('"')
-                .and_then(|v| v.strip_suffix('"'))
-            else {
+            let Some(value) = rest.strip_prefix('"').and_then(|v| v.strip_suffix('"')) else {
                 continue;
             };
             let path = PathBuf::from(value.replace("\\\\", "\\"));
@@ -159,8 +202,12 @@ pub fn find(override_dir: Option<&Path>) -> Option<PathBuf> {
             return Some(dir.to_path_buf());
         }
     }
-    from_steam_libraries()
-        .into_iter()
-        .chain(from_common_paths())
-        .next()
+    detect()
+}
+
+pub fn detect() -> Option<PathBuf> {
+    komoe_registry_dir()
+        .or_else(dmm_install_dir)
+        .or_else(|| from_steam_libraries().into_iter().next())
+        .or_else(|| from_common_paths().into_iter().next())
 }

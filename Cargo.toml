@@ -1,12 +1,13 @@
 [package]
-name = "charreplace"
-version = "0.1.0"
+name = "umareplacereborn"
+version = "0.5.0"
 edition = "2021"
 description = "Global character replacement plugin for Hachimi (ported from Trainers' Legend G)"
 license = "GPL-3.0-or-later"
 repository = "https://github.com/Yuweisha/UmareplaceReborn"
 
 [lib]
+name = "umareplacereborn"
 crate-type = ["cdylib"]
 
 [profile.release]
@@ -15,6 +16,9 @@ lto = true
 codegen-units = 1
 panic = "abort"
 strip = true
+
+[build-dependencies]
+embed-resource = "2.4"
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }

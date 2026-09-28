@@ -96,7 +96,10 @@ pub fn load() {
     if let Some(config) = loaded {
         let entries = config.data.len();
         *CONFIG.write().unwrap() = config;
-        api::log_info(&format!("charreplace config loaded ({} rule(s))", entries));
+        api::log_info(&format!(
+            "umareplacereborn config loaded ({} rule(s))",
+            entries
+        ));
     }
 }
 

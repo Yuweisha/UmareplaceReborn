@@ -1,6 +1,6 @@
 [package]
-name = "charreplace_installer"
-version = "0.1.0"
+name = "umareplacereborn_installer"
+version = "0.5.0"
 edition = "2021"
 description = "Installer for the UmareplaceReborn Hachimi plugin"
 license = "GPL-3.0-or-later"
@@ -20,16 +20,22 @@ panic = "abort"
 [dependencies]
 serde_json = { version = "1.0", features = ["preserve_order"] }
 include-bytes-zstd = { version = "0.1", optional = true }
+pelite = "0.10"
 
 [dependencies.windows]
 version = "0.58"
 features = [
     "Win32_Foundation",
     "Win32_System_Com",
+    "Win32_System_LibraryLoader",
     "Win32_System_Registry",
     "Win32_UI_Shell",
     "Win32_UI_WindowsAndMessaging",
 ]
+
+[build-dependencies]
+embed-resource = "2.4"
+pelite = "0.10"
 
 [features]
 # Embed the plugin dll compressed. On by default so a released installer is a

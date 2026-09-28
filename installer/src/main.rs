@@ -2,7 +2,9 @@
 #![windows_subsystem = "windows"]
 
 mod find;
+mod gui;
 mod ui;
+mod version;
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -11,16 +13,18 @@ use std::path::{Path, PathBuf};
 #[macro_use]
 extern crate include_bytes_zstd;
 
-const DLL_NAME: &str = "charreplace.dll";
+const DLL_NAME: &str = "umareplacereborn.dll";
+
+const LEGACY_DLL_NAME: &str = "charreplace.dll";
 
 #[cfg(feature = "compress_bin")]
 fn dll_bytes() -> Vec<u8> {
-    include_bytes_zstd!("charreplace.dll", 19).to_vec()
+    include_bytes_zstd!("umareplacereborn.dll", 19).to_vec()
 }
 
 #[cfg(not(feature = "compress_bin"))]
 fn dll_bytes() -> Vec<u8> {
-    include_bytes!("charreplace.dll").to_vec()
+    include_bytes!("umareplacereborn.dll").to_vec()
 }
 
 fn main() {
@@ -38,6 +42,13 @@ fn main() {
         .position(|a| a == "--dir" || a == "-d")
         .and_then(|i| args.get(i + 1))
         .map(PathBuf::from);
+
+    if args.len() <= 1 {
+        if let Err(e) = gui::run() {
+            ui::error(&format!("界面打开失败：{e}"));
+        }
+        return;
+    }
 
     let result = run(dir_override, uninstall, dry_run);
 
@@ -102,11 +113,18 @@ fn run(dir_override: Option<PathBuf>, uninstall: bool, dry_run: bool) -> Result<
     }
 }
 
-fn install_to(game_dir: &Path) -> Result<String, String> {
-    let dll_path = game_dir.join(DLL_NAME);
+pub(crate) fn install_to(game_dir: &Path) -> Result<String, String> {
+    let target_dir = find::install_dir_for(game_dir);
+    let dll_path = target_dir.join(DLL_NAME);
+
+    let legacy = target_dir.join(LEGACY_DLL_NAME);
+    if legacy.is_file() {
+        let _ = fs::remove_file(&legacy);
+    }
+    let _ = fs::remove_file(target_dir.join(format!("{LEGACY_DLL_NAME}.bak")));
 
     if dll_path.is_file() {
-        let _ = fs::copy(&dll_path, game_dir.join(format!("{DLL_NAME}.bak")));
+        let _ = fs::copy(&dll_path, dll_path.with_extension("dll.bak"));
     }
 
     fs::write(&dll_path, dll_bytes()).map_err(|e| {
@@ -121,7 +139,9 @@ fn install_to(game_dir: &Path) -> Result<String, String> {
 
     let mut msg = format!("安装完成。\n\n游戏目录：\n{}", game_dir.display());
     if config_changed {
-        msg.push_str("\n\n已把 charreplace.dll 加进 Hachimi 的 load_libraries。");
+        msg.push_str(&format!(
+            "\n\n已把 {DLL_NAME} 加进 Hachimi 的 load_libraries。"
+        ));
     } else {
         msg.push_str("\n\nHachimi 的 load_libraries 里本来就有它，无需改动。");
     }
@@ -129,14 +149,18 @@ fn install_to(game_dir: &Path) -> Result<String, String> {
     Ok(msg)
 }
 
-fn uninstall_from(game_dir: &Path) -> Result<String, String> {
-    let dll_path = game_dir.join(DLL_NAME);
+pub(crate) fn uninstall_from(game_dir: &Path) -> Result<String, String> {
+    let target_dir = find::install_dir_for(game_dir);
+    let dll_path = target_dir.join(DLL_NAME);
+    for name in [LEGACY_DLL_NAME, &format!("{LEGACY_DLL_NAME}.bak")] {
+        let _ = fs::remove_file(target_dir.join(name));
+    }
     if dll_path.is_file() {
         fs::remove_file(&dll_path).map_err(|e| {
             format!("删除插件失败：\n{}\n\n{e}\n\n如果游戏正在运行，请先退出游戏。", dll_path.display())
         })?;
     }
-    let _ = fs::remove_file(game_dir.join(format!("{DLL_NAME}.bak")));
+    let _ = fs::remove_file(dll_path.with_extension("dll.bak"));
     patch_config(game_dir, false)?;
     Ok(format!(
         "已卸载。\n\n游戏目录：\n{}\n\n重新启动游戏后插件不再加载。",
@@ -171,16 +195,22 @@ fn patch_config(game_dir: &Path, add: bool) -> Result<bool, String> {
         .as_array_mut()
         .ok_or_else(|| "配置里的 load_libraries 不是数组，不敢动它。".to_string())?;
 
+    let mut changed = false;
+
+    let before = arr.len();
+    arr.retain(|v| v.as_str() != Some(LEGACY_DLL_NAME));
+    if arr.len() != before {
+        changed = true;
+    }
+
     let present = arr.iter().any(|v| v.as_str() == Some(DLL_NAME));
-    let changed = if add && !present {
+    if add && !present {
         arr.push(serde_json::Value::String(DLL_NAME.to_owned()));
-        true
+        changed = true;
     } else if !add && present {
         arr.retain(|v| v.as_str() != Some(DLL_NAME));
-        true
-    } else {
-        false
-    };
+        changed = true;
+    }
 
     if changed {
         let _ = fs::copy(&config_path, config_path.with_extension("json.bak"));

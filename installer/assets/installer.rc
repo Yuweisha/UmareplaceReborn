@@ -1,0 +1,45 @@
+#include <windows.h>
+#include "version_defs.h"
+
+LANGUAGE LANG_NEUTRAL, SUBLANG_NEUTRAL
+
+129 DIALOG 0, 0, 187, 76
+STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "UmareplaceReborn Installer"
+FONT 8, "MS Shell Dlg"
+{
+    CONTROL "Packaged version: N/A", 1002, "STATIC", SS_LEFT | WS_CHILD | WS_VISIBLE | WS_GROUP, 7, 7, 173, 8
+    CONTROL "Install location", 1009, "STATIC", SS_LEFT | WS_CHILD | WS_VISIBLE | WS_GROUP, 7, 21, 93, 8
+    CONTROL "", 1003, "EDIT", ES_LEFT | ES_AUTOHSCROLL | ES_READONLY | WS_CHILD | WS_VISIBLE | WS_BORDER | WS_TABSTOP, 7, 33, 122, 14
+    CONTROL "Browse...", 1004, "BUTTON", BS_PUSHBUTTON | WS_CHILD | WS_VISIBLE | WS_TABSTOP, 133, 33, 47, 14
+    CONTROL "Installed: None", 1006, "STATIC", WS_CHILD | WS_VISIBLE | WS_GROUP, 7, 62, 65, 8
+    CONTROL "Install", 1000, "BUTTON", BS_DEFPUSHBUTTON | WS_CHILD | WS_VISIBLE | WS_TABSTOP, 77, 59, 50, 14
+    CONTROL "Uninstall", 1001, "BUTTON", BS_PUSHBUTTON | WS_CHILD | WS_VISIBLE | WS_TABSTOP, 130, 59, 50, 14
+}
+
+107 ICON "charreplace.ico"
+
+1 VERSIONINFO
+FILEVERSION VERSION_INFO_VER
+PRODUCTVERSION VERSION_INFO_VER
+FILEOS 0x40004
+FILETYPE 0x1
+{
+    BLOCK "StringFileInfo"
+    {
+        BLOCK "000004b0"
+        {
+            VALUE "ProductName", "UmareplaceReborn Installer"
+            VALUE "FileVersion", VERSION_INFO_STR
+            VALUE "FileDescription", "UmareplaceReborn Installer"
+            VALUE "ProductVersion", VERSION_INFO_STR
+        }
+    }
+
+    BLOCK "VarFileInfo"
+    {
+        VALUE "Translation", 0x0000 0x04B0
+    }
+}
+
+1 RT_MANIFEST "charreplace.manifest"
