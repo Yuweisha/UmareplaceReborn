@@ -3,7 +3,7 @@
 鸣谢、代码参考、灵感来源:Trainer-Legend-G
 把游戏里的角色全局替换成别的角色，作为Hachimi-Edge下挂载的独立插件。
 - 优点:原生、易于安装、不随本体更新而需要重新patch
-- 缺点:还没测
+- 缺点:只能替换角色，无法替换音轨，其他的暂时还没测出来
 
 ## 功能
 
@@ -13,7 +13,6 @@
 - 配置格式与 TLG 的 `replaceGlobalChar` 完全兼容，可以直接把 TLG 的配置段粘过来
 - 游戏内菜单：配置编辑器下新增选项「角色替换」，角色和服装从 `master.mdb` 直接读取**带搜索的下拉**，**可以直接搜角色名或 ID**（例如搜 `1114` 就是迷人景致）
 - 数据库直接用 rusqlite 读文件，不走游戏内部接口
-- 语音也一起换：改写 cue 名里的角色 ID 让游戏去播替换后角色的语音，Hachimi 的字幕会跟着换，不需要解包任何资源
 
 ## 安装
 
@@ -106,8 +105,3 @@ cargo ndk -t arm64-v8a build --release
 - 通过 Hachimi 插件接口 v3（`hachimi_init_v3`）接入，使用的 API：`interceptor_hook` 挂钩、`il2cpp_*` 取类/字段、`gui_*` 画界面、`hachimi_get_data_path` 定位 `master.mdb`。
 - 挂钩 `Gallop.CharacterBuildInfo::Rebuild`，在模型构建前改写 `_charaId` / `_dressId` / `_headModelSubId` / `_motionDressId`，并把 `_cardId` 置 -1；另外挂钩 `Gallop.WorkSingleModeCharaData::GetRaceDressId` 让比赛服装也走替换表。
 - 服装的头部模型与迷你模型信息来自 `master.mdb` 的 `dress_data`（`head_sub_id`、`have_mini`），启动时一次性缓存。
-- 语音替换在 IL2CPP 的字符串构造函数 `il2cpp_string_new` 这一层改写 cue 名（`snd_voi_training_110301` 属于角色 1103 → 换成替换后的角色，`snd_voi_live_*` 同样适用）。之所以不直接 hook 播放入口 `AudioManager.PlayInternal`：Hachimi 为了字幕已经占了那个地址，而 MinHook 不允许同一地址二次 hook。改写发生在 cue 名进入游戏之前，所以 Hachimi 的字幕读到的是替换后的角色，台词会跟着换。只有 `snd_voi_` 开头、且最后一段以角色 ID 打头的 cue 会被改写，系统音效这类不动。
-
-## 许可
-
-GPL-3.0-or-later（与 Hachimi 及 Trainers' Legend G 保持一致）。
