@@ -12,17 +12,19 @@
 - 比赛服装（`GetRaceDressId`）也跟着替换
 - 配置格式与 TLG 的 `replaceGlobalChar` 完全兼容，可以直接把 TLG 的配置段粘过来
 - 游戏内菜单：配置编辑器下新增选项「角色替换」，角色和服装从 `master.mdb` 直接读取**带搜索的下拉**，**可以直接搜角色名或 ID**（例如搜 `1114` 就是迷人景致）
-- 数据库直接用 rusqlite 读文件，不走游戏内部接口
 
 ## 安装
 
-### Windows
+### Windows自动化
+下载安装程序，安装程序会通过注册表和环境变量读取游戏目录自动安装，并添加config字段，若未找到游戏目录需手动选取
 
-1. 把 `charreplace.dll` 放进 `<游戏根目录>` 文件夹。(例如UmamusumePrettyDerby_Jpn)
+### Windows手动安装
+
+1. 把 `umaplacereborn.dll` 放进 `<游戏根目录>` 文件夹。(例如UmamusumePrettyDerby_Jpn)
 2. 在 `<游戏目录>/hachimi/config.json` 的 `load_libraries` 里加上路径（顶层键，Hachimi 自己也是写在这里）：
 
 ```json
-    "load_libraries": ["charreplace.dll"]
+    "load_libraries": ["umaplacereborn.dll"]
 ```
 
 3. 重启游戏，打开菜单（默认右方向键）→ 配置编辑器 → **角色替换**。
@@ -42,21 +44,20 @@
 首次运行时，插件会尝试从 `<游戏目录>/hachimi/config.json` 里的 `replaceGlobalChar` 段导入现有配置，然后写到自己的文件：
 
 ```
-<游戏目录>/hachimi/charreplace.json
+<游戏目录>/hachimi/umaplacereborn.json
 ```
 
-格式（字段名与 TLG 一致，也接受 `replace_global_char` 之类的下划线写法）：
+格式（字段名与 TLG 一致）：
 
 ```json
 {
     "enable": true,
     "replace_universal": true,
-    "replace_voice": true,
     "data": [
         {
             "origCharId": 1046,
-            "newChrId": 1030,
-            "newClothId": 103001,
+            "newChrId": 1114,
+            "newClothId": 111401,
             "replaceMini": false
         }
     ]
@@ -71,12 +72,10 @@
 | `newChrId` | 替换成哪个角色 |
 | `newClothId` | 用哪个服装（服装 ID 一般是 `<角色 ID> * 100 + 序号`） |
 | `replaceMini` | 这条规则是否也作用于迷你角色 |
-| `replace_voice` | 是否同时替换语音（默认开）。只影响 cue 名里带角色 ID 的语音 |
-| `log_audio_cues` | 诊断开关：把游戏播放的每个 cue 记进日志，用来定位还不支持的音轨（例如 live 歌曲） |
 
-生效的场景与 TLG 一致：除了默认、家中对话/走动、以及迷你场景以外的控制器都会被替换。
+生效的场景与 TLG 一致：除了默认、主页对话/走动、以及迷你角色场景以外的都会被替换。
 
-日志写在 `hachimi.log` 里，搜 `charreplace` 就能看到插件加载、hook、数据库加载的情况。
+日志写在 `hachimi.log` 里，搜 `umaplacereborn` 就能看到插件加载、hook、数据库加载的情况。
 
 ## 从源码构建
 
@@ -84,7 +83,7 @@ Windows：
 
 ```bash
 cargo build --release
-# 产物：target/release/charreplace.dll
+# 产物：target/release/umaplacereborn.dll
 ```
 
 Android（需要 Android NDK，用 [cargo-ndk](https://github.com/bbqsrc/cargo-ndk) 自动配置工具链）：
@@ -93,7 +92,7 @@ Android（需要 Android NDK，用 [cargo-ndk](https://github.com/bbqsrc/cargo-n
 rustup target add aarch64-linux-android
 cargo install cargo-ndk
 cargo ndk -t arm64-v8a build --release
-# 产物：target/aarch64-linux-android/release/libcharreplace.so
+# 产物：target/aarch64-linux-android/release/libumaplacereborn.so
 ```
 
 代码本身不含平台相关分支，两个平台共用同一份源码。依赖只有 serde、serde_json、rusqlite（bundled sqlite）、once_cell。
