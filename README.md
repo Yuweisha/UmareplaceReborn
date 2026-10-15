@@ -1,7 +1,7 @@
 # UMA角色替换Reborn
 
-鸣谢、代码参考、灵感来源:Trainer-Legend-G
-把游戏里的角色全局替换成别的角色，作为Hachimi-Edge下挂载的独立插件。
+鸣谢、代码参考、灵感来源:[Trainer-Legend-G](https://github.com/MinamiChiwa/Trainers-Legend-G),遵从原项目GPL3.0改编、开源、分发   
+作为Hachimi-Edge下挂载的独立插件,把游戏里的角色模型全局替换成另一个角色。
 - 优点:原生、易于安装、不随本体更新而需要重新patch
 - 缺点:只能替换角色，无法替换音轨，其他的暂时还没测出来
 
