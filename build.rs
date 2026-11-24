@@ -40,6 +40,8 @@ FILETYPE 0x2
     let out = PathBuf::from(std::env::var("OUT_DIR").unwrap()).join("plugin_version.rc");
     std::fs::write(&out, rc).expect("写入版本资源失败");
 
-    #[cfg(windows)]
-    embed_resource::compile(&out, embed_resource::NONE);
+    let target = std::env::var("TARGET").unwrap_or_default();
+    if target.contains("windows") {
+        embed_resource::compile(&out, embed_resource::NONE);
+    }
 }
