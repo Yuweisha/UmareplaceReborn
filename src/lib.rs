@@ -11,6 +11,7 @@ mod api;
 mod config;
 mod db;
 mod hook;
+mod motion;
 mod ui;
 
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -56,18 +57,26 @@ pub extern "C" fn hachimi_init_v3(get_api: api::GetApiFn, _version: i32) -> i32 
 /// the very first time (should not happen, but a stale symbol table would
 /// otherwise silently disable the whole plugin).
 fn install_hooks_with_retry() {
-    if hook::install() {
+    let chars_ok = hook::install();
+    let motion_ok = motion::install();
+
+    if chars_ok && motion_ok {
         HOOKS_INSTALLED.store(true, Ordering::SeqCst);
         return;
     }
 
-    std::thread::spawn(|| {
+    std::thread::spawn(move || {
+        let mut chars_ok = chars_ok;
+        let mut motion_ok = motion_ok;
         for _ in 0..20 {
             std::thread::sleep(Duration::from_millis(500));
-            if HOOKS_INSTALLED.load(Ordering::SeqCst) {
-                return;
+            if !chars_ok {
+                chars_ok = hook::install();
             }
-            if hook::install() {
+            if !motion_ok {
+                motion_ok = motion::install();
+            }
+            if chars_ok && motion_ok {
                 HOOKS_INSTALLED.store(true, Ordering::SeqCst);
                 return;
             }

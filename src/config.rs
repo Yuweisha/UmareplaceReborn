@@ -49,6 +49,8 @@ pub struct CharReplaceConfig {
     /// into a T-pose and the scene waits on assets forever.
     #[serde(default)]
     pub replace_in_cutscene: bool,
+    #[serde(default = "default_true")]
+    pub borrow_motion: bool,
     #[serde(default)]
     pub data: Vec<Entry>,
 }
@@ -60,6 +62,7 @@ impl Default for CharReplaceConfig {
             // TLG defaults this to true.
             replace_universal: true,
             replace_in_cutscene: false,
+            borrow_motion: true,
             data: Vec::new(),
         }
     }

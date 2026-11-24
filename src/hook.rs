@@ -91,15 +91,8 @@ fn replace_char_controller(
         return false;
     }
 
-    // Generic dresses (dress_id < 100000: race wear, uniform, gym clothes)
-    // belong to scenes the game choreographs itself. Skipping the dress alone
-    // is not enough: rewriting the character id while leaving the generic
-    // dress behind produces combos the game has no assets for - the race
-    // screen ends up without a thumbnail and a cutscene hangs. Skip the whole
-    // replacement instead.
-    if !replace_universal && *dress_id < 100000 {
-        return false;
-    }
+    let orig_dress = *dress_id;
+    let universal_dress = db::dress_chara_id(orig_dress) == 0;
 
     if controller_type == CT_MINI {
         if let Some((new_chara_id, new_dress_id)) = find_replacement(*chara_id, true) {
@@ -153,7 +146,9 @@ fn replace_char_controller(
 
     if let Some((new_chara_id, new_dress_id)) = find_replacement(*chara_id, false) {
         *chara_id = new_chara_id;
-        *dress_id = new_dress_id;
+        if !universal_dress && replace_universal {
+            *dress_id = new_dress_id;
+        }
         align_dress_with_chara(dress_id, new_chara_id);
         *head_id = db::dress_head_sub_id(*dress_id);
         return true;
@@ -162,7 +157,7 @@ fn replace_char_controller(
     false
 }
 
-extern "C" fn rebuild_hook(this: *mut Il2CppObject) {
+extern "C" fn rebuild_hook(this: *mut Il2CppObject, method: *mut c_void) {
     let chara_field = CHARA_ID_FIELD.load(Ordering::SeqCst);
     if !chara_field.is_null() {
         let mut chara_id = Symbols::get_field_i32(this, chara_field);
@@ -171,6 +166,8 @@ extern "C" fn rebuild_hook(this: *mut Il2CppObject) {
             Symbols::get_field_i32(this, CONTROLLER_TYPE_FIELD.load(Ordering::SeqCst));
         let mut head_model_sub_id =
             Symbols::get_field_i32(this, HEAD_MODEL_SUB_ID_FIELD.load(Ordering::SeqCst));
+        let orig_dress = dress_id;
+        let borrow_motion = config::with(|c| c.borrow_motion);
 
         if replace_char_controller(
             &mut chara_id,
@@ -186,26 +183,36 @@ extern "C" fn rebuild_hook(this: *mut Il2CppObject) {
                 HEAD_MODEL_SUB_ID_FIELD.load(Ordering::SeqCst),
                 head_model_sub_id,
             );
-            Symbols::set_field_i32(this, MOTION_DRESS_ID_FIELD.load(Ordering::SeqCst), dress_id);
+            let motion_dress = if borrow_motion && orig_dress > 0 {
+                orig_dress
+            } else {
+                dress_id
+            };
+            Symbols::set_field_i32(this, MOTION_DRESS_ID_FIELD.load(Ordering::SeqCst), motion_dress);
             Symbols::set_field_i32(this, CARD_ID_FIELD.load(Ordering::SeqCst), -1);
         }
     }
 
     let trampoline = REBUILD_TRAMPOLINE.load(Ordering::SeqCst);
     if !trampoline.is_null() {
-        let original: extern "C" fn(*mut Il2CppObject) = unsafe { std::mem::transmute(trampoline) };
-        original(this);
+        let original: extern "C" fn(*mut Il2CppObject, *mut c_void) =
+            unsafe { std::mem::transmute(trampoline) };
+        original(this, method);
     }
 }
 
-extern "C" fn race_dress_hook(this: *mut Il2CppObject, is_apply_dress_change: bool) -> i32 {
+extern "C" fn race_dress_hook(
+    this: *mut Il2CppObject,
+    is_apply_dress_change: bool,
+    method: *mut c_void,
+) -> i32 {
     let trampoline = RACE_DRESS_TRAMPOLINE.load(Ordering::SeqCst);
     if trampoline.is_null() {
         return 0;
     }
-    let original: extern "C" fn(*mut Il2CppObject, bool) -> i32 =
+    let original: extern "C" fn(*mut Il2CppObject, bool, *mut c_void) -> i32 =
         unsafe { std::mem::transmute(trampoline) };
-    let ret = original(this, is_apply_dress_change);
+    let ret = original(this, is_apply_dress_change, method);
 
     // Dress ids of owned characters are `<chara id> * 100 + <cloth number>`.
     if ret > 100000 && ret <= 999999 {

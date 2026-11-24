@@ -276,6 +276,12 @@ pub extern "C" fn section_callback(ui: *mut c_void, _userdata: *mut c_void) {
         config::save();
     }
 
+    let mut borrow_motion = config::with(|config| config.borrow_motion);
+    if api::ui_checkbox(ui, "动作沿用原角色（借用原角色动作）", &mut borrow_motion) {
+        config::with_mut(|config| config.borrow_motion = borrow_motion);
+        config::save();
+    }
+
 
     api::ui_separator(ui);
 
